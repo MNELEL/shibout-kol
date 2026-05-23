@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">מעבדת קול פונטית</string>
+    <string name="nav_transcription">תמלול</string>
+    <string name="nav_profiles">פרופילים</string>
+    <string name="transcription_title">תמלול פונטי בזמן אמת</string>
+    <string name="profiles_title">פרופילי קול שמורים</string>
+    <string name="record_hint">לחץ על המיקרופון כדי להתחיל להקליט</string>
+    <string name="phonetic_label">תעתיק פונטי (IPA/Spelling):</string>
+    <string name="waiting_for_record">ממתין להקלטה...</string>
+    <string name="loading">מנתח קול...</string>
+    <string name="no_profiles">אין פרופילים שמורים עדיין</string>
+    <string name="permission_required">נחוצה הרשאת הקלטה כדי להשתמש באפליקציה</string>
+    <string name="clone_voice">שיבוץ קול</string>
+    <string name="play_sample">נגן דגימה</string>
+    <string name="created_at">נוצר ב-</string>
+</resources>

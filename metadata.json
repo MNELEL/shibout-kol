@@ -1,0 +1,6 @@
+{
+  "name": "מעבדת קול פונטית",
+  "description": "אפליקציה לניתוח פונטי בזמן אמת ותמלול IPA, עם יכולות שיבוץ קול וניהול פרופילי קול מקומיים.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
