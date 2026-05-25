@@ -19,7 +19,7 @@ class VoiceRepository(private val voiceDao: VoiceDao) {
         voiceDao.deleteProfile(profile)
     }
 
-    suspend fun transcribePhonetically(audioBytes: ByteArray): String {
+    suspend fun transcribePhonetically(audioBytes: ByteArray, mimeType: String = "audio/mp4"): String {
         val apiKey = BuildConfig.GEMINI_API_KEY
         val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
         
@@ -30,7 +30,7 @@ class VoiceRepository(private val voiceDao: VoiceDao) {
                             "Do NOT translate. Do NOT correct. " +
                             "Use IPA layout if possible or English phonetic spelling. " +
                             "Output only the transcription."),
-                    Part(inlineData = InlineData(mimeType = "audio/wav", data = base64Audio))
+                    Part(inlineData = InlineData(mimeType = mimeType, data = base64Audio))
                 )
             )),
             generationConfig = GenerationConfig(temperature = 0.0f)

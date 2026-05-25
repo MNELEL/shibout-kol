@@ -9,11 +9,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
@@ -87,11 +92,25 @@ fun MainScreen() {
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
-                    Text(
-                        stringResource(R.string.app_name),
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    ) 
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                            contentDescription = stringResource(R.string.app_name),
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            stringResource(R.string.app_name),
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                            fontSize = 20.sp
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
@@ -119,12 +138,30 @@ fun MainScreen() {
                 FloatingActionButton(
                     onClick = {
                         if (!isRecording) {
-                            recorder.startRecording("temp_audio")
-                            isRecording = true
+                            val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                Manifest.permission.RECORD_AUDIO
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                            
+                            if (!hasPermission) {
+                                permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                Toast.makeText(context, "נא אשר את הרשאת ההקלטה ונסה שנית", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val success = recorder.startRecording("temp_audio")
+                                if (success) {
+                                    isRecording = true
+                                } else {
+                                    Toast.makeText(context, "שגיאה בהפעלת המיקרופון, אנא פתח הרשאות", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         } else {
                             val file = recorder.stopRecording()
                             isRecording = false
-                            file?.let { viewModel.transcribeAudio(it) }
+                            if (file != null) {
+                                viewModel.transcribeAudio(file, recorder.currentMimeType)
+                            } else {
+                                Toast.makeText(context, "שגיאה בסיום ההקלטה", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     containerColor = if (isRecording) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
@@ -184,11 +221,26 @@ fun TranscriptionScreen(viewModel: VoiceViewModel, isRecording: Boolean) {
             if (isRecording) {
                 WaveformAnimation()
             } else {
-                Text(
-                    stringResource(R.string.record_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        stringResource(R.string.record_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
 
@@ -232,12 +284,97 @@ fun TranscriptionScreen(viewModel: VoiceViewModel, isRecording: Boolean) {
                 }
             }
         }
+
+        if (transcription.isNotEmpty() && !transcription.startsWith("Error:") && !transcription.startsWith("שגיאה:") && transcription != stringResource(R.string.waiting_for_record)) {
+            val context = LocalContext.current
+            var showSaveDialog by remember { mutableStateOf(false) }
+            var profileName by remember { mutableStateOf("") }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = { showSaveDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Rounded.Save, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("שמור כפרופיל קול")
+            }
+
+            if (showSaveDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSaveDialog = false },
+                    title = { Text("שמור פרופיל קול חדש") },
+                    text = {
+                        Column {
+                            Text("הזן שם עבור פרופיל קול זה:")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextField(
+                                value = profileName,
+                                onValueChange = { profileName = it },
+                                placeholder = { Text("למשל: הקול שלי") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (profileName.isNotEmpty()) {
+                                    var tempFile = File(context.cacheDir, "temp_audio.m4a")
+                                    if (!tempFile.exists()) {
+                                        tempFile = File(context.cacheDir, "temp_audio.3gp")
+                                    }
+                                    viewModel.saveVoiceProfile(profileName, transcription, tempFile)
+                                    showSaveDialog = false
+                                    profileName = ""
+                                    Toast.makeText(context, "פרופיל קול נשמר בהצלחה!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Text("שמור")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSaveDialog = false }) {
+                            Text("ביטול")
+                        }
+                    }
+                )
+            }
+        }
     }
 }
 
 @Composable
 fun ProfilesScreen(viewModel: VoiceViewModel) {
     val profiles by viewModel.profiles.collectAsStateWithLifecycle()
+    val playingAudioPath by viewModel.playingAudioPath.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Hoist TextToSpeech engine safely with try-catch
+    var tts: android.speech.tts.TextToSpeech? by remember { mutableStateOf(null) }
+    
+    DisposableEffect(context) {
+        var obj: android.speech.tts.TextToSpeech? = null
+        try {
+            obj = android.speech.tts.TextToSpeech(context) { status ->
+                if (status != android.speech.tts.TextToSpeech.SUCCESS) {
+                    android.util.Log.e("ProfilesScreen", "TTS initialization failed with status: $status")
+                }
+            }
+            tts = obj
+        } catch (e: Exception) {
+            android.util.Log.e("ProfilesScreen", "Failed to construct TextToSpeech engine", e)
+        }
+        onDispose {
+            try {
+                obj?.stop()
+                obj?.shutdown()
+            } catch (e: Exception) {}
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text(
@@ -249,12 +386,60 @@ fun ProfilesScreen(viewModel: VoiceViewModel) {
         
         if (profiles.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(stringResource(R.string.no_profiles), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(32.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(RoundedCornerShape(20.dp)),
+                        alpha = 0.6f
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        stringResource(R.string.no_profiles),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "הקלט ונתח קול בלשונית התמלול כדי ליצור פרופיל מעובד ראשון",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(profiles) { profile ->
-                    VoiceProfileCard(profile)
+                    val isPlaying = playingAudioPath == profile.audioPath
+                    VoiceProfileCard(
+                        profile = profile,
+                        viewModel = viewModel,
+                        isPlaying = isPlaying,
+                        onPlayClick = {
+                            viewModel.togglePlayProfile(profile.audioPath)
+                        },
+                        onSynthesizeClick = {
+                            val textToSpeak = profile.transcription ?: "שלום, קול פונטי"
+                            if (tts != null) {
+                                try {
+                                    tts?.speak(textToSpeak, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, null)
+                                    Toast.makeText(context, "משחזר קול משובץ...", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "שגיאה בהקראת הטקסט", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "מנוע דיבור אינו זמין במכשיר זה", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -262,7 +447,17 @@ fun ProfilesScreen(viewModel: VoiceViewModel) {
 }
 
 @Composable
-fun VoiceProfileCard(profile: VoiceProfile) {
+fun VoiceProfileCard(
+    profile: VoiceProfile,
+    viewModel: VoiceViewModel,
+    isPlaying: Boolean,
+    onPlayClick: () -> Unit,
+    onSynthesizeClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val audioFileExists = remember(profile.audioPath) {
+        profile.audioPath != null && java.io.File(profile.audioPath).exists()
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -275,30 +470,62 @@ fun VoiceProfileCard(profile: VoiceProfile) {
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
-            ) {
-                Icon(
-                    Icons.Rounded.InterpreterMode,
-                    contentDescription = null,
-                    modifier = Modifier.padding(12.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+            Image(
+                painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+            )
             Spacer(modifier = Modifier.width(16.dp))
-            Column {
+            Column(modifier = Modifier.weight(1.0f)) {
                 Text(profile.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (!profile.transcription.isNullOrEmpty()) {
+                    Text(
+                        profile.transcription,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
                 Text(
                     "${stringResource(R.string.created_at)} ${java.text.SimpleDateFormat("dd/MM/yy").format(profile.createdAt)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(modifier = Modifier.weight(1.0f))
-            IconButton(onClick = { /* Simulated Synthesis */ }) {
-                Icon(Icons.Rounded.AutoFixNormal, contentDescription = stringResource(R.string.clone_voice))
+            
+            // Play Original Sample Button
+            if (audioFileExists) {
+                IconButton(onClick = onPlayClick) {
+                    Icon(
+                        if (isPlaying) Icons.Rounded.Stop else Icons.Rounded.PlayArrow,
+                        contentDescription = stringResource(R.string.play_sample),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
+            }
+
+            // Clone Synthesis Text-To-Speech Button
+            IconButton(onClick = onSynthesizeClick) {
+                Icon(
+                    Icons.Rounded.AutoFixNormal,
+                    contentDescription = stringResource(R.string.clone_voice),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Delete Button
+            IconButton(onClick = {
+                viewModel.deleteVoiceProfile(profile)
+                Toast.makeText(context, "פרופיל נמחק", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(
+                    Icons.Rounded.Delete,
+                    contentDescription = "מחק פרופיל",
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
@@ -306,23 +533,29 @@ fun VoiceProfileCard(profile: VoiceProfile) {
 
 @Composable
 fun WaveformAnimation() {
+    val infiniteTransition = rememberInfiniteTransition(label = "waveform")
     Row(
         modifier = Modifier.height(60.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         repeat(15) { index ->
-            val height = remember { mutableStateOf(10f) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    height.value = (10..50).random().toFloat()
-                    delay(120)
-                }
-            }
+            val height by infiniteTransition.animateFloat(
+                initialValue = 10f,
+                targetValue = 50f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(
+                        durationMillis = 300 + (index * 30),
+                        easing = LinearEasing
+                    ),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "bar_$index"
+            )
             Box(
                 modifier = Modifier
                     .width(6.dp)
-                    .height(height.value.dp)
+                    .height(height.dp)
                     .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp))
             )
         }
