@@ -21,6 +21,11 @@ class VoiceRepository(private val voiceDao: VoiceDao) {
 
     suspend fun transcribePhonetically(audioBytes: ByteArray, mimeType: String = "audio/mp4"): String {
         val apiKey = BuildConfig.GEMINI_API_KEY
+        
+        if (apiKey.isNullOrEmpty() || apiKey == "MY_GEMINI_API_KEY" || apiKey.contains("placeholder", ignoreCase = true)) {
+            return "שגיאה: מפתח ה-API (GEMINI_API_KEY) אינו מוגדר. אנא פתח את פאנל ה-Secrets (סמליל המפתח בסרגל הצידי הימני של AI Studio), הוסף מפתח תחת השם 'GEMINI_API_KEY', והפעל מחדש את האפליקציה."
+        }
+
         val base64Audio = Base64.encodeToString(audioBytes, Base64.NO_WRAP)
         
         val request = GenerateContentRequest(
@@ -39,8 +44,18 @@ class VoiceRepository(private val voiceDao: VoiceDao) {
         return try {
             val response = RetrofitClient.service.generateContent(apiKey, request)
             response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "No result"
+        } catch (e: retrofit2.HttpException) {
+            val code = e.code()
+            val errorBody = e.response()?.errorBody()?.string() ?: ""
+            android.util.Log.e("VoiceRepository", "Gemini API HTTP Error $code: $errorBody", e)
+            if (code == 403) {
+                "שגיאה 403 (גישה אסורה/Forbidden): מפתח ה-API שהוזן אינו בתוקף, או שאין לו הרשאה עבור מודל זה. אנא ודא שהמפתח בפאנל ה-Secrets ב-AI Studio תקין ורענן את האוגר."
+            } else {
+                "שגיאת שרת Gemini (קוד $code): $errorBody"
+            }
         } catch (e: Exception) {
-            "Error: ${e.message}"
+            android.util.Log.e("VoiceRepository", "Gemini API General Error", e)
+            "שגיאה בהתקשרות ל-Gemini API: ${e.localizedMessage}"
         }
     }
 }

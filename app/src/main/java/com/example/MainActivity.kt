@@ -47,6 +47,9 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.utils.AudioRecorder
 import com.example.viewmodel.VoiceViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -74,6 +77,7 @@ fun MainScreen() {
     
     val recorder = remember { AudioRecorder(context) }
     var isRecording by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // Permission handling
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -84,9 +88,8 @@ fun MainScreen() {
         }
     }
 
-    LaunchedEffect(Unit) {
-        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
+
+
 
     Scaffold(
         topBar = {
@@ -96,8 +99,8 @@ fun MainScreen() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                        coil.compose.AsyncImage(
+                            model = R.drawable.app_logo_1779694589878,
                             contentDescription = stringResource(R.string.app_name),
                             modifier = Modifier
                                 .size(32.dp)
@@ -147,20 +150,43 @@ fun MainScreen() {
                                 permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                 Toast.makeText(context, "נא אשר את הרשאת ההקלטה ונסה שנית", Toast.LENGTH_SHORT).show()
                             } else {
-                                val success = recorder.startRecording("temp_audio")
-                                if (success) {
-                                    isRecording = true
-                                } else {
-                                    Toast.makeText(context, "שגיאה בהפעלת המיקרופון, אנא פתח הרשאות", Toast.LENGTH_SHORT).show()
+                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    try {
+                                        val success = recorder.startRecording("temp_audio")
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            if (success) {
+                                                isRecording = true
+                                            } else {
+                                                Toast.makeText(context, "שגיאה בהפעלת המיקרופון, אנא פתח הרשאות", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                            Toast.makeText(context, "שגיאה חולפת בהקלטה", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 }
                             }
                         } else {
-                            val file = recorder.stopRecording()
-                            isRecording = false
-                            if (file != null) {
-                                viewModel.transcribeAudio(file, recorder.currentMimeType)
-                            } else {
-                                Toast.makeText(context, "שגיאה בסיום ההקלטה", Toast.LENGTH_SHORT).show()
+                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    val file = recorder.stopRecording()
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        isRecording = false
+                                        if (file != null) {
+                                            viewModel.transcribeAudio(file, recorder.currentMimeType)
+                                        } else {
+                                            Toast.makeText(context, "שגיאה בסיום ההקלטה", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        isRecording = false
+                                        Toast.makeText(context, "שגיאה בסיום ההקלטה", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
                             }
                         }
                     },
@@ -226,8 +252,8 @@ fun TranscriptionScreen(viewModel: VoiceViewModel, isRecording: Boolean) {
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                    coil.compose.AsyncImage(
+                        model = R.drawable.app_logo_1779694589878,
                         contentDescription = null,
                         modifier = Modifier
                             .size(54.dp)
@@ -285,7 +311,8 @@ fun TranscriptionScreen(viewModel: VoiceViewModel, isRecording: Boolean) {
             }
         }
 
-        if (transcription.isNotEmpty() && !transcription.startsWith("Error:") && !transcription.startsWith("שגיאה:") && transcription != stringResource(R.string.waiting_for_record)) {
+        val hasError = transcription.startsWith("Error:") || transcription.startsWith("שגיאה:") || uiState is VoiceViewModel.UiState.Error
+        if (transcription.isNotEmpty() && !hasError && transcription != stringResource(R.string.waiting_for_record)) {
             val context = LocalContext.current
             var showSaveDialog by remember { mutableStateOf(false) }
             var profileName by remember { mutableStateOf("") }
@@ -391,8 +418,8 @@ fun ProfilesScreen(viewModel: VoiceViewModel) {
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(32.dp)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.app_logo_1779694589878),
+                    coil.compose.AsyncImage(
+                        model = R.drawable.app_logo_1779694589878,
                         contentDescription = null,
                         modifier = Modifier
                             .size(100.dp)
@@ -470,8 +497,8 @@ fun VoiceProfileCard(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.app_logo_1779694589878),
+            coil.compose.AsyncImage(
+                model = R.drawable.app_logo_1779694589878,
                 contentDescription = null,
                 modifier = Modifier
                     .size(56.dp)
