@@ -17,14 +17,14 @@ import java.util.concurrent.TimeUnit
 
 @Serializable
 data class GenerateContentRequest(
-    val contents: List<Content>,
+    val contents: List<Content>? = null,
     val generationConfig: GenerationConfig? = null,
     val systemInstruction: Content? = null
 )
 
 @Serializable
 data class Content(
-    val parts: List<Part>
+    val parts: List<Part>? = null
 )
 
 @Serializable
@@ -35,8 +35,8 @@ data class Part(
 
 @Serializable
 data class InlineData(
-    val mimeType: String,
-    val data: String
+    val mimeType: String? = null,
+    val data: String? = null
 )
 
 @Serializable
@@ -49,12 +49,12 @@ data class GenerationConfig(
 
 @Serializable
 data class GenerateContentResponse(
-    val candidates: List<Candidate>
+    val candidates: List<Candidate>? = null
 )
 
 @Serializable
 data class Candidate(
-    val content: Content
+    val content: Content? = null
 )
 
 interface GeminiApiService {

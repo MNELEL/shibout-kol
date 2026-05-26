@@ -43,7 +43,7 @@ class VoiceRepository(private val voiceDao: VoiceDao) {
 
         return try {
             val response = RetrofitClient.service.generateContent(apiKey, request)
-            response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "No result"
+            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "No result"
         } catch (e: retrofit2.HttpException) {
             val code = e.code()
             val errorBody = e.response()?.errorBody()?.string() ?: ""
@@ -53,9 +53,9 @@ class VoiceRepository(private val voiceDao: VoiceDao) {
             } else {
                 "שגיאת שרת Gemini (קוד $code): $errorBody"
             }
-        } catch (e: Exception) {
-            android.util.Log.e("VoiceRepository", "Gemini API General Error", e)
-            "שגיאה בהתקשרות ל-Gemini API: ${e.localizedMessage}"
+        } catch (t: Throwable) {
+            android.util.Log.e("VoiceRepository", "Gemini API General Error", t)
+            "שגיאה בהתקשרות ל-Gemini API: ${t.localizedMessage ?: t.message ?: t.toString()}"
         }
     }
 }

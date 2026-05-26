@@ -114,9 +114,9 @@ class VoiceViewModel(application: Application) : AndroidViewModel(application) {
                 val result = repository.transcribePhonetically(bytes, mimeType)
                 _transcription.value = result
                 _uiState.value = UiState.Success
-            } catch (e: Exception) {
-                _transcription.value = "שגיאה בניתוח הקובץ: ${e.localizedMessage}"
-                _uiState.value = UiState.Error(e.localizedMessage ?: "שגיאה לא ידועה")
+            } catch (t: Throwable) {
+                _transcription.value = "שגיאה בניתוח הקובץ: ${t.localizedMessage ?: t.message ?: t.toString()}"
+                _uiState.value = UiState.Error(t.localizedMessage ?: "שגיאה לא ידועה")
             }
         }
     }
